@@ -1,3 +1,2 @@
-# Steps
-
-1. Create dataset
+# IRRCC
+Image Retrieval Region Connection Calculus
