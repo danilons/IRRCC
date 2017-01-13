@@ -12,9 +12,9 @@ def save_image_list(dataset, image_path, output_path, mode):
     if os.path.exists(basename):
         os.remove(basename)
 
-    hdf5 = h5py.Filename(basename, 'w')
+    hdf5 = h5py.File(basename, 'w')
     with click.progressbar(length=len(dataset), show_pos=True, show_percent=True) as bar:
-        for row_number, annotation in enumerate(dataset):
+        for row_number, annotation in enumerate(dataset['annotation']):
             filename = unicode(annotation['filename'])
             imagefile = os.path.join(image_path, filename)
             if not os.path.exists(imagefile):
@@ -47,23 +47,23 @@ def save_image_list(dataset, image_path, output_path, mode):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='This is a IRRCC sample program')
-    parser.add_argument('-g', 'ground_truth', action="store_true", default='sun09_groundTruth.mat')
-    parser.add_argument('-i', 'image_path', action="store_true", default='Images/static_sun09_database')
-    parser.add_argument('-o', 'output_folder', action="store_true", default='data')
+    parser = argparse.ArgumentParser(description='IRRCC program')
+    parser.add_argument('-g', '--ground_truth', action="store", default='sun09_groundTruth.mat')
+    parser.add_argument('-i', '--image_path', action="store", default='Images/static_sun09_database')
+    parser.add_argument('-o', '--output_path', action="store", default='data')
     params = parser.parse_args()
 
     print("Reading data")
-    dset = sio.load_mad(params['ground_truth'],
-                        struct_as_record=True,
-                        chars_as_strings=True,
-                        squeeze_me=True)
+    dset = sio.loadmat(params.ground_truth,
+                       struct_as_record=True,
+                       chars_as_strings=True,
+                       squeeze_me=True)
 
     trainset = {'train': 'Dtraining', 'test': 'Dtest'}
-    for mode in trainset:
+    for mode, dset_key in trainset.iteritems():
         print("{}:-----------------------------".format(mode.title()))
-        save_image_list(dset[trainset[mode]],
-                        params['image_path'],
-                        params['output_path'],
+        save_image_list(dset[dset_key],
+                        params.image_path,
+                        params.output_path,
                         mode)
         print("Done.")

@@ -1,0 +1,5 @@
+*.prototxt
+*.pyc
+*.hdf5
+*.caffemodel
+
