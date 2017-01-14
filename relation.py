@@ -29,6 +29,10 @@ class Relation(object):
     def __getitem__(self, item):
         return self.relation[item]
 
+    @classmethod
+    def get_name(cls, relation):
+        return cls._longname[relation]
+
 
 class RCC(object):
 

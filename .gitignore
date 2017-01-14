@@ -3,6 +3,7 @@
 *.ipynb
 data/names.txt
 data/*.mat
+data/*.json
 images
 *.prototxt
 *.pyc

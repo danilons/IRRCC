@@ -37,6 +37,12 @@ class Dataset(object):
     def get_object_id(self, classname):
         return self._classname.get(classname, 0)
 
+    def get_im_array(self, image, rgb=False):
+        if rgb:
+            cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
+        return cv2.imread(os.path.join(self.image_path, image))
+
+
     def boxes(self, image):
         return np.array(self.objects[image]['boxes'])
 
@@ -68,25 +74,34 @@ class Dataset(object):
 
     def topology_relation(self, image):
         objects = self.get_objects(image)
-        boxes = np.array(objects.values())
+        if len(objects) == 0:
+            return []
+
+        boxes = np.vstack(objects.values())
+        if len(objects) == 1:
+            return [(boxes, boxes, 'EQ')]
+
         relations = []
+        im = self.get_im_array(image)
+        nn1 = 0
+        for box1 in boxes:
+            nn1 += 1
+            for box2 in boxes[nn1:]:
+                x1, y1, x2, y2 = box1[:4].astype(np.int32)
+                contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
 
-        for box1, box2 in itertools.permutations(boxes, boxes):
-            x1, y1, x2, y2 = box1[:4].astype(np.int32)
-            contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+                x1, y1, x2, y2 = box2[:4].astype(np.int32)
+                contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
 
-            x1, y1, x2, y2 = box2[:4].astype(np.int32)
-            contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-
-            relation = self.detector.compute(image, contour1, contour2)
-            relations.append([box1, box2, relation.scope])
+                relation = self.detector.compute(im, contour1, contour2)
+                relations.append((box1, box2, relation.scope))
 
         return relations
 
-    def get_image_with_objects(self, image, obj_id=None, colors=None):
-        img = cv2.imread(os.path.join(self.image_path, image))
+    def get_image_with_objects(self, image, obj_id=None, **kwargs):
+        img = self.get_im_array(image, **kwargs)
         
-        colors = colors or {}
+        colors = kwargs.get('colors', {})
         objects = self.get_objects(image)
         objects = objects if not obj_id else {obj_id: objects.get(obj_id, [])}
 
@@ -102,4 +117,9 @@ class Dataset(object):
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         return img
 
-
+    def get_image_with_box_pair(self, image, box1, box2):
+        img = self.get_im_array(image, **kwargs)        
+        color = (0, 0, 255)
+        cv2.rectangle(img, (box1[0], box1[1]), (box1[2], box1[3]), color, 2)
+        cv2.rectangle(img, (box2[0], box2[1]), (box2[2], box2[3]), color, 2)
+        return img
