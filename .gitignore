@@ -1,9 +1,9 @@
 .DS_Store
 .ipynb_checkpoints/
 *.ipynb
-data/names.txt
-data/*.mat
-data/*.json
+data/*
+original
+segmentation
 images
 *.prototxt
 *.pyc

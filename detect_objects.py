@@ -16,13 +16,13 @@ def detect_objects(net, input_file, image_path, output_file):
     objects_hdf5 = h5py.File(output_file, 'w')
     with click.progressbar(length=len(hdf5), show_pos=True, show_percent=True) as bar:
         for imname in hdf5:
+            group = objects_hdf5.create_group(imname)
             im = cv2.imread(os.path.join(image_path, imname))
             if im is None:
                 print("Unable to read image: {}".format(os.path.join(image_path, imname)))
                 bar.update(1)
                 continue
 
-            group = objects_hdf5.create_group(imname)
             scores, boxes = im_detect(net, im)
             group['scores'] = scores
             group['boxes'] = boxes
