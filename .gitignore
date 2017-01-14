@@ -1,3 +1,9 @@
+.DS_Store
+.ipynb_checkpoints/
+*.ipynb
+data/names.txt
+data/*.mat
+images
 *.prototxt
 *.pyc
 *.hdf5
