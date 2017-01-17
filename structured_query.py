@@ -1,4 +1,5 @@
 # coding: utf-8
+import numpy as np
 from scipy.io import loadmat
 
 
@@ -6,7 +7,6 @@ class StructuredQuery:
     def __init__(self, fname):
         self.db = loadmat(fname, struct_as_record=True, chars_as_strings=True, squeeze_me=True)
         valid_queries = [q for q in self.query if len(np.nonzero(q['rank'])[0].tolist()) > 30]
-        print(len(valid_queries))
         
         self.queries = {}
         self.queries['a'] = [dict(zip(q.dtype.names, q)) for q in valid_queries 
@@ -39,15 +39,15 @@ class StructuredQuery:
         for query in self.queries.get(query_type, []):
             unary = None
             if query['unary']:
-                unary = structured_queries.names[query['unary'] - 1]
+                unary = self.names[query['unary'] - 1]
             try:
-                name1 = structured_queries.names[query['binary'][:, 0].squeeze() - 1]
-                prepo = structured_queries.relations[query['binary'][:, 2].squeeze() - 1]
-                name2 = structured_queries.names[query['binary'][:, 1].squeeze() - 1]
+                name1 = self.names[query['binary'][:, 0].squeeze() - 1]
+                prepo = self.relations[query['binary'][:, 2].squeeze() - 1]
+                name2 = self.names[query['binary'][:, 1].squeeze() - 1]
             except IndexError:
-                name1 = structured_queries.names[query['binary'][0].squeeze() - 1]
-                prepo = structured_queries.relations[query['binary'][2].squeeze() - 1]
-                name2 = structured_queries.names[query['binary'][1].squeeze() - 1]
+                name1 = self.names[query['binary'][0].squeeze() - 1]
+                prepo = self.relations[query['binary'][2].squeeze() - 1]
+                name2 = self.names[query['binary'][1].squeeze() - 1]
             
             query_name = np.vstack((name1, prepo, name2)).reshape(3, -1).T
             if unary:
