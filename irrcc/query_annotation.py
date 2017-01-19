@@ -20,6 +20,18 @@ class QueryAnnotation:
         for k, imlist in self.db.iteritems():
             for imname in imlist:
                 self.imgs.setdefault(imname, []).append(k)
+
+        self.objects = []
+        self.objects_by_image = {}
+        for img, queries in self.imgs.iteritems():
+            for query in queries:
+                noun1, _, noun2 = query.split('-')
+                self.objects_by_image.setdefault(img, set()).add(noun1)
+                self.objects_by_image.setdefault(img, set()).add(noun2)
+                self.objects.append(noun1)
+                self.objects.append(noun2)
+                
+        self.objects = list(set(self.objects))
         
     def __getitem__(self, imname):
         return self.imgs.get(imname, [])

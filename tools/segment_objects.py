@@ -59,7 +59,7 @@ if __name__ == "__main__":
     files = glob.glob(os.path.join(params.dataset_path, 'dataset_*.hdf5'))
     for fname in files:
         print("Start processing file: {}".format(fname))
-        output_file = fname.replace('dataset_', 'objects_')
+        output_file = fname.replace('dataset_', 'segmentation_')
         segment_objects(net, fname, params.image_path, output_file)
 
     print("Done.")
