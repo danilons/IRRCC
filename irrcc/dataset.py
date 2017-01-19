@@ -14,18 +14,17 @@ class Dataset(object):
 
     def __init__(self, path, suffix='train', image_path='images'):
         self.coordinates = h5py.File(os.path.join(path, 'dataset_{}.hdf5'.format(suffix)))
-        self.objects = h5py.File(os.path.join(path, 'objects_{}.hdf5'.format(suffix)))
+        self._objects = Detection(path=path, suffix=suffix)
+        self._segmentation = Segmentation(path=path, suffix=suffix)
+        
 
-        self._classes = collections.OrderedDict()
-        with open(os.path.join(path, 'rcnn' , 'names.txt'), 'r') as fp:
-            for line in fp.readlines():
-                index, name = line.strip().split()
-                self._classes[np.int32(index)] = name
+    @property
+    def objects(self):
+        return self._objects
 
-        self._classname = {v: k for k, v in self._classes.iteritems()}
-        self.image_path = image_path
-        # topological stuff
-        self.detector = RCC()
+    @property
+    def segmentation(self):
+        return self._segmentation
 
     @property
     def images(self):
@@ -39,6 +38,35 @@ class Dataset(object):
             contour[classname] = np.vstack((bbox['x'], bbox['y'])).T
         return contour
 
+    def get_im_array(self, image, rgb=False):
+        if rgb:
+            cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
+        return cv2.imread(os.path.join(self.image_path, image))
+
+    def get_image_with_objects(self, image, obj_id=None, **kwargs):
+        img = self.get_im_array(image, **kwargs)
+        self._objects.get_image_with_objects(img, image, obj_id, **kwargs)
+        return img
+
+    def get_image_with_box_pair(self, image, box1, box2):
+        img = self.get_im_array(image, **kwargs) 
+        return self._objects(img, box1, box2)       
+        
+
+class Detection(object):
+
+    def __init__(self, path, suffix='train'):
+        self.objects = h5py.File(os.path.join(path, 'objects_{}.hdf5'.format(suffix)))
+        self._classes = collections.OrderedDict()
+        with open(os.path.join(path, 'rcnn' , 'names.txt'), 'r') as fp:
+            for line in fp.readlines():
+                index, name = line.strip().split()
+                self._classes[np.int32(index)] = name
+
+        self._classname = {v: k for k, v in self._classes.iteritems()}
+        # topological stuff
+        self.detector = RCC()
+
     @property
     def classes(self):
         return self._classes
@@ -46,13 +74,7 @@ class Dataset(object):
     def get_object_id(self, classname):
         return self._classname.get(classname, 0)
 
-    def get_im_array(self, image, rgb=False):
-        if rgb:
-            cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
-        return cv2.imread(os.path.join(self.image_path, image))
-
-
-    def boxes(self, image):
+     def boxes(self, image):
         return np.array(self.objects[image]['boxes'])
 
     def scores(self, image):
@@ -81,35 +103,7 @@ class Dataset(object):
 
         return detections
 
-    def topology_relation(self, image):
-        objects = self.get_objects(image)
-        if len(objects) == 0:
-            return []
-
-        boxes = np.vstack(objects.values())
-        if len(objects) == 1:
-            return [(boxes, boxes, 'EQ')]
-
-        relations = []
-        im = self.get_im_array(image)
-        nn1 = 0
-        for box1 in boxes:
-            nn1 += 1
-            for box2 in boxes[nn1:]:
-                x1, y1, x2, y2 = box1[:4].astype(np.int32)
-                contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-
-                x1, y1, x2, y2 = box2[:4].astype(np.int32)
-                contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-
-                relation = self.detector.compute(im, contour1, contour2)
-                relations.append((box1, box2, relation.scope))
-
-        return relations
-
-    def get_image_with_objects(self, image, obj_id=None, **kwargs):
-        img = self.get_im_array(image, **kwargs)
-        
+    def get_image_with_objects(self, img, image, obj_id=None, **kwargs):
         colors = kwargs.get('colors', {})
         objects = self.get_objects(image)
         objects = objects if not obj_id else {obj_id: objects.get(obj_id, [])}
@@ -127,10 +121,47 @@ class Dataset(object):
         return img
 
     def get_image_with_box_pair(self, image, box1, box2):
-        img = self.get_im_array(image, **kwargs)        
+        img = image.copy()
         color = (0, 0, 255)
         cv2.rectangle(img, (box1[0], box1[1]), (box1[2], box1[3]), color, 2)
         cv2.rectangle(img, (box2[0], box2[1]), (box2[2], box2[3]), color, 2)
         return img
+
+    def topology_relation(self, img,  image):
+        objects = self.get_objects(image)
+        if len(objects) == 0:
+            return []
+
+        boxes = np.vstack(objects.values())
+        if len(objects) == 1:
+            return [(boxes, boxes, 'EQ')]
+
+        relations = []
+        im = img.copy()
+        nn1 = 0
+        for box1 in boxes:
+            nn1 += 1
+            for box2 in boxes[nn1:]:
+                x1, y1, x2, y2 = box1[:4].astype(np.int32)
+                contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+                x1, y1, x2, y2 = box2[:4].astype(np.int32)
+                contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+                relation = self.detector.compute(im, contour1, contour2)
+                relations.append((box1, box2, relation.scope))
+
+        return relations
+
+class Segmentation(Detection):
+    def __init__(self, path, suffix='train'):
+        self.objects = h5py.File(os.path.join(path, 'objects_{}.hdf5'.format(suffix)))
+        self._classes = collections.OrderedDict()
+        with open(os.path.join(path, 'sceneparsing' , 'names.txt'), 'r') as fp:
+            for line in fp.readlines():
+                index, name = line.strip().split()
+                self._classes[np.int32(index)] = name
+
+        self._classname = {v: k for k, v in self._classes.iteritems()}
 
 
