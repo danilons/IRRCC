@@ -16,7 +16,7 @@ class Dataset(object):
         self.coordinates = h5py.File(os.path.join(path, 'dataset_{}.hdf5'.format(suffix)))
         self._objects = Detection(path=path, suffix=suffix)
         self._segmentation = Segmentation(path=path, suffix=suffix)
-        
+        self.image_path = image_path
 
     @property
     def objects(self):
@@ -56,7 +56,9 @@ class Dataset(object):
 class Detection(object):
 
     def __init__(self, path, suffix='train'):
-        self.objects = h5py.File(os.path.join(path, 'objects_{}.hdf5'.format(suffix)))
+        filename = os.path.join(path, 'objects_{}.hdf5'.format(suffix))
+        print("Reading objects from: {}".format(filename))
+        self.objects = h5py.File(filename)
         self._classes = collections.OrderedDict()
         with open(os.path.join(path, 'rcnn' , 'names.txt'), 'r') as fp:
             for line in fp.readlines():
@@ -74,13 +76,13 @@ class Detection(object):
     def get_object_id(self, classname):
         return self._classname.get(classname, 0)
 
-     def boxes(self, image):
+    def boxes(self, image):
         return np.array(self.objects[image]['boxes'])
 
     def scores(self, image):
         return np.array(self.objects[image]['scores'])
 
-    def get_objects(self, image, confidence=0.8, nox_supression_max=0.3, only_with_objects=True):
+    def get_objects(self, image, **kwargs):
         scores = self.scores(image)
         boxes = self.boxes(image)
        
@@ -127,7 +129,7 @@ class Detection(object):
         cv2.rectangle(img, (box2[0], box2[1]), (box2[2], box2[3]), color, 2)
         return img
 
-    def topology_relation(self, img,  image):
+    def topology_relation(self, shape,  image):
         objects = self.get_objects(image)
         if len(objects) == 0:
             return []
@@ -137,7 +139,6 @@ class Detection(object):
             return [(boxes, boxes, 'EQ')]
 
         relations = []
-        im = img.copy()
         nn1 = 0
         for box1 in boxes:
             nn1 += 1
@@ -148,20 +149,58 @@ class Detection(object):
                 x1, y1, x2, y2 = box2[:4].astype(np.int32)
                 contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
 
-                relation = self.detector.compute(im, contour1, contour2)
+                relation = self.detector.compute(shape, contour1, contour2)
                 relations.append((box1, box2, relation.scope))
 
         return relations
 
 class Segmentation(Detection):
     def __init__(self, path, suffix='train'):
-        self.objects = h5py.File(os.path.join(path, 'objects_{}.hdf5'.format(suffix)))
+        self.objects = h5py.File(os.path.join(path, 'segmentation_{}.hdf5'.format(suffix)))
         self._classes = collections.OrderedDict()
-        with open(os.path.join(path, 'sceneparsing' , 'names.txt'), 'r') as fp:
-            for line in fp.readlines():
-                index, name = line.strip().split()
+        with open(os.path.join(path, 'sceneparsing' , 'objectInfo150.txt'), 'r') as fp:
+            for line in fp.readlines()[1:]:
+                index, _, _, _, name = line.strip().split('\t')
                 self._classes[np.int32(index)] = name
 
         self._classname = {v: k for k, v in self._classes.iteritems()}
+        # topological stuff
+        self.detector = RCC()
+
+    def get_objects(self, image, **kwargs):
+        objects = np.array(self.objects[image])
+        classes = np.unique(objects)
+        segmentation = {}
+
+        for k in classes:
+            x, y = np.where(objects == k)
+            img = np.zeros(objects.shape[:2], dtype=np.uint8)
+            img[x, y] = 255.
+            _, binary = cv2.threshold(img, 127,255,0)
+            contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            biggest = sorted([(len(cnt), nn) for nn, cnt in enumerate(contours)], key=lambda x: x[0], reverse=True)
+            _, idx = biggest[0]
+            segmentation[k] = contours[idx]
+
+        return segmentation
+
+    def topology_relation(self, shape,  image):
+        objects = self.get_objects(image)
+        if len(objects) == 0:
+            return []
+
+        contours = objects.values()
+        if len(objects) == 1:
+            return [(contours, contours, 'EQ')]
+
+        relations = []
+        nn1 = 0
+        for contour1 in contours:
+            nn1 += 1
+            for contour2 in contours[nn1:]:
+                relation = self.detector.compute(shape, contour1, contour2)
+                relations.append((contour1, contour2, relation.scope))
+
+        return relations
 
 

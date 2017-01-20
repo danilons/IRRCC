@@ -36,12 +36,12 @@ class Relation(object):
 
 class RCC(object):
 
-    def compute(self, image, object1, object2, kernel=None):
+    def compute(self, shape, object1, object2, kernel=None):
 
-        imx = np.zeros(image.shape[:2], dtype=np.float32)
+        imx = np.zeros(shape, dtype=np.float32)
         cv2.fillPoly(imx, [object1], 1)
 
-        imy = np.zeros(image.shape[:2], dtype=np.float32)
+        imy = np.zeros(shape, dtype=np.float32)
         cv2.fillPoly(imy, [object2], 2)
 
         return self.detect(imx, imy, kernel)

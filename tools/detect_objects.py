@@ -36,9 +36,9 @@ def detect_objects(net, input_file, image_path, output_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='IRRCC program')
     parser.add_argument('-d', '--dataset_path', action="store", default='data/')
-    parser.add_argument('-p', '--prototxt', action="store", default='data/test.prototxt')
-    parser.add_argument('-w', '--weights', action="store", default='data/rcnn.caffemodel')
-    parser.add_argument('-i', '--image_path', action="store", default='Images/static_sun09_database')
+    parser.add_argument('-p', '--prototxt', action="store", default='data/rcnn/test.prototxt')
+    parser.add_argument('-w', '--weights', action="store", default='data/rcnn/rcnn.caffemodel')
+    parser.add_argument('-i', '--image_path', action="store", default='images')
     parser.add_argument('--gpu', dest='gpu', action="store_true", default=True)
     parser.add_argument('--no-gpu', dest='gpu', action='store_false')
     parser.set_defaults(feature=True)
