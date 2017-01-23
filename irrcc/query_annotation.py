@@ -35,3 +35,9 @@ class QueryAnnotation:
         
     def __getitem__(self, imname):
         return self.imgs.get(imname, [])
+
+    def features(self):
+        for img, queries in self.imgs.iteritems():
+            for query in queries:
+                noun1, preposition, noun2 = query.split('-')
+                yield (img, noun1, preposition, noun2)

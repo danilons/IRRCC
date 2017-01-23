@@ -5,38 +5,39 @@ import glob
 import click
 import argparse
 import json
+import h5py
+import numpy
 path = os.path.join(os.path.dirname(__file__), '..')
 sys.path.insert(0, path)
 from irrcc.dataset import Dataset
 
 def store_topology(dset, output_file):
-    relations1 = {}
-    relations2 = {}
+    filename = output_file.replace('#', 'segment')
+    if os.path.exists(filename):
+        print("Removing file: {}".format(filename))
+        os.remove(filename)
+
+    hdf5 = h5py.File(filename, 'w')
     with click.progressbar(length=len(dset.images), show_pos=True, show_percent=True) as bar:
         for image in dset.images:
             try: 
-                # im_array = dset.get_im_array(image)
-                # topology1 = dset.objects.topology_relation(im_array.shape, image)
-                topology2 = dset.segmentation.topology_relation((384, 384), image)
+                relations = dset.segmentation.topology_relation((384, 384), image)
             except KeyError:
                 bar.update(1)
                 continue
-            
-            relations2[image] = []
-            # for box1, box2, relation in topology1:
-            #     relations1[image].append({'box1': box1.tolist(), 
-            #                               'box2': box2.tolist(), 'rcc': relation})
-
-            for cnt1, cnt2, relation in topology2:
-                relations2[image].append({'box1': cnt1.tolist(), 
-                                          'box2': cnt2.tolist(), 'rcc': relation})
+           
+            hdf5_group = hdf5.create_group(image)
+            for topology in relations:
+                objects = '-'.join(topology['objects']).strip()
+                hdf5_group.create_group(objects)
+                try:
+                    hdf5_group[objects].create_dataset('contours1', data=topology['contours'][0], compression="gzip")
+                    hdf5_group[objects].create_dataset('contours2', data=topology['contours'][1], compression="gzip")
+                    hdf5_group[objects]['relation'] = numpy.string_(topology['relation'])
+                except ValueError:
+                    print("Error when processing image {} and {}".format(image, objects))
             bar.update(1)
 
-    # with open(output_file.replace('#', 'boxes'), 'w') as fp:
-    #     json.dump(relations1, fp)
-
-    with open(output_file.replace('#', 'segment'), 'w') as fp:
-        json.dump(relations2, fp)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='IRRCC program')
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         print("Processing mode: {}".format(mode))
 
         dset = Dataset(params.dataset_path, mode, params.image_path)
-        output_file = fname.replace('dataset_', 'topology_#_').replace('hdf5', 'json')
+        output_file = fname.replace('dataset_', 'topology_#_')
         store_topology(dset, output_file)
 
     print("Done.")

@@ -158,7 +158,7 @@ class Segmentation(Detection):
     def __init__(self, path, suffix='train'):
         self.objects = h5py.File(os.path.join(path, 'segmentation_{}.hdf5'.format(suffix)))
         self._classes = collections.OrderedDict()
-        with open(os.path.join(path, 'sceneparsing' , 'objectInfo150.txt'), 'r') as fp:
+        with open(os.path.join(path, 'sceneparsing' , 'names.txt'), 'r') as fp:
             for line in fp.readlines()[1:]:
                 index, _, _, _, name = line.strip().split('\t')
                 self._classes[np.int32(index)] = name
@@ -189,18 +189,23 @@ class Segmentation(Detection):
         if len(objects) == 0:
             return []
 
-        contours = objects.values()
+        contours = objects.items()
         if len(objects) == 1:
             return [(contours, contours, 'EQ')]
 
         relations = []
         nn1 = 0
-        for contour1 in contours:
+        for obj1, contour1 in contours:
             nn1 += 1
-            for contour2 in contours[nn1:]:
+            for obj2, contour2 in contours[nn1:]:
                 relation = self.detector.compute(shape, contour1, contour2)
-                relations.append((contour1, contour2, relation.scope))
+                relations.append({'objects': (self.classes[obj1], self.classes[obj2]), 
+                                  'contours': (contour1, contour2), 
+                                  'relation': relation.scope})
 
         return relations
+
+    def get_object_names(self, image, **kwargs):
+        return [self.classes[obj] for obj in self.get_objects(image)]
 
 
