@@ -14,13 +14,13 @@ class Dataset(object):
 
     def __init__(self, path, suffix='train', image_path='images'):
         self.coordinates = h5py.File(os.path.join(path, 'dataset_{}.hdf5'.format(suffix)))
-        self._objects = Detection(path=path, suffix=suffix)
+        self._detector = Detection(path=path, suffix=suffix)
         self._segmentation = Segmentation(path=path, suffix=suffix)
         self.image_path = image_path
 
     @property
-    def objects(self):
-        return self._objects
+    def detector(self):
+        return self._detector
 
     @property
     def segmentation(self):
@@ -41,17 +41,12 @@ class Dataset(object):
     def get_im_array(self, image, rgb=False):
         if rgb:
             cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
-        return cv2.imread(os.path.join(self.image_path, image))
-
+        return cv2.imread(os.path.join(self.image_path, image))     
+        
     def get_image_with_objects(self, image, obj_id=None, **kwargs):
         img = self.get_im_array(image, **kwargs)
-        self._objects.get_image_with_objects(img, image, obj_id, **kwargs)
+        self.detector.get_image_with_objects(img, image, obj_id, **kwargs)
         return img
-
-    def get_image_with_box_pair(self, image, box1, box2):
-        img = self.get_im_array(image, **kwargs) 
-        return self._objects(img, box1, box2)       
-        
 
 class Detection(object):
 
@@ -86,6 +81,10 @@ class Detection(object):
         scores = self.scores(image)
         boxes = self.boxes(image)
        
+        confidence = kwargs.get('confidence', 0.8)
+        nox_supression_max = kwargs.get('nox_supression_max', 0.3)
+        only_with_objects = kwargs.get('only_with_objects')
+
         detections = {}
         for k in self.classes:
             if k == 0:  # background
@@ -95,7 +94,7 @@ class Detection(object):
             class_scores = scores[indices, k]
             class_boxes = boxes[indices, k * 4: (k + 1) * 4]
             class_detections = np.hstack((class_boxes, class_scores[:, np.newaxis])).astype(np.float32)
-            keep = nms(class_detections, nox_supression_max, force_cpu=True)
+            keep = nms(class_detections, nox_supression_max)
             class_detections = class_detections[keep, :]
             # verify it there is something detected
             if only_with_objects and len(class_detections) == 0:
@@ -121,6 +120,7 @@ class Detection(object):
                             (bbox[0], bbox[1] + 2), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         return img
+
 
     def get_image_with_box_pair(self, image, box1, box2):
         img = image.copy()

@@ -13,6 +13,10 @@ cfg.TEST.HAS_RPN = True  # Use RPN for proposals
 
 def detect_objects(net, input_file, image_path, output_file):
     hdf5 = h5py.File(input_file)
+
+    if os.path.exists(output_file):
+        os.remove(output_file)
+        
     objects_hdf5 = h5py.File(output_file, 'w')
     with click.progressbar(length=len(hdf5), show_pos=True, show_percent=True) as bar:
         for imname in hdf5:
