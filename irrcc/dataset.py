@@ -156,7 +156,9 @@ class Detection(object):
 
 class Segmentation(Detection):
     def __init__(self, path, suffix='train'):
-        self.objects = h5py.File(os.path.join(path, 'segmentation_{}.hdf5'.format(suffix)))
+        fname = os.path.join(path, 'segmentation_{}.hdf5'.format(suffix))
+        print("Reading segmentation from {}".format(fname))
+        self.objects = h5py.File(fname)
         self._classes = collections.OrderedDict()
         with open(os.path.join(path, 'sceneparsing' , 'names.txt'), 'r') as fp:
             for line in fp.readlines()[1:]:
@@ -195,9 +197,17 @@ class Segmentation(Detection):
 
         relations = []
         nn1 = 0
-        for obj1, contour1 in contours:
+        for obj1, c1 in contours:
             nn1 += 1
-            for obj2, contour2 in contours[nn1:]:
+            x, y, w, h = cv2.boundingRect(c1)
+            x1, y1, x2, y2 = x, y, x + w, y + h
+            contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+            for obj2, c2 in contours[nn1:]:
+                x, y, w, h = cv2.boundingRect(c2)
+                x1, y1, x2, y2 = x, y, x + w, y + h
+                contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
                 relation = self.detector.compute(shape, contour1, contour2)
                 relations.append({'objects': (self.classes[obj1], self.classes[obj2]), 
                                   'contours': (contour1, contour2), 
