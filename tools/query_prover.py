@@ -2,17 +2,22 @@
 import os
 import argparse
 import click
+import time
+import json
 import re
 import numpy as np
 import pandas as pd
 import sys
+import subprocess 
 path = os.path.join(os.path.dirname(__file__), '..')
 sys.path.insert(0, path)
+from irrcc.dataset import Dataset
 from irrcc.query_annotation import QueryAnnotation
 
 
 class KnowledgeBase:
     def __init__(self, df, ltb_runner, eprover, batch_config):
+        self.dset = Dataset('data', 'test', 'images/')
         self.ltb_runner = ltb_runner
         self.eprover = eprover
         self.batch_config = batch_config
@@ -65,8 +70,7 @@ class KnowledgeBase:
 
     def tptp_query(self, image, noun1, noun2, preposition):
         prep = preposition.title().replace("_", "")
-        return """fof(conj1,conjecture,
-                  ( (? [V__X1,V__X2,V__X3] :
+        return """fof(conj1,conjecture, ( (? [V__X1,V__X2,V__X3] :
                     (s__instance(V__X1,s__Image) &
                      s__instance(V__X2,s__{noun1}) &
                      s__instance(V__X3,s__{noun2}) &
@@ -77,9 +81,16 @@ class KnowledgeBase:
                """.format(noun1=noun1.title(), noun2=noun2.title(), prep=prep, img=image.replace(".jpg", ""))
 
     def prover(self, image, query):
-        noun1, preposition, noun2 = query.split('-')
-        tptp_query = self.tptp_query(image, noun1, noun2, preposition)
+        try:
+            noun1, preposition, noun2 = query.split('-')
+        except AttributeError:
+            return image, None, []
 
+        objects = {self.dset.segmentation.classes[k] for k in np.unique(np.array(self.dset.segmentation.objects[image]))}
+        if noun1 not in objects or noun2 not in objects:
+            return image, None, []
+
+        tptp_query = self.tptp_query(image, noun1, noun2, preposition)
         with open('IRRC.tptp', 'w') as fp:
             for axiom in self.tptp_by_image(image):
                 fp.write(axiom + "\n")
@@ -91,7 +102,9 @@ class KnowledgeBase:
             fp.write("")
 
         cmd = '{} {} {}'.format(self.ltb_runner, self.batch_config, self.eprover)
-        os.system(cmd)
+        with open(os.devnull, 'wb') as devnull:
+            _ = subprocess.call([self.ltb_runner, self.batch_config, self.eprover], 
+                                 stdout=devnull, stderr=subprocess.STDOUT)
 
         response = []
         with open("Answers.p", "r") as fp:
@@ -107,9 +120,7 @@ class KnowledgeBase:
         responses = {}
         for image in self.images:
             image, imname, _ = self.prover(image=image, query=query)
-            if imname:
-                responses[image] = imname
-        return responses
+            yield image, imname
 
 
 def apk(actual, predicted, k=10):
@@ -132,14 +143,23 @@ def apk(actual, predicted, k=10):
 
 def evaluate(queries, ground_truth, kb):
     mean_average_precision = []
-    with click.progressbar(length=len(ground_truth.db), show_pos=True, show_percent=True) as bar:
-        for nn, query in enumerate(ground_truth.db):
-            equivalent = queries[queries['Original'] == query].Equivalent.iloc[0]
-            if equivalent:
-                retrieved = kb.runquery(equivalent)
-                score = apk(ground_truth[query], retrieved)
-                mean_average_precision.append(score)
-            bar.update(1)
+    valid_queries = [v for v in queries.values() if v is not None]
+    for nn, query in enumerate(ground_truth.db):
+        print("Processed {}/{}".format(nn, len(ground_truth.db)))
+        equivalent = queries.get(query)
+        if equivalent:
+            retrieved = [] 
+            with click.progressbar(length=len(kb.images), show_pos=True, show_percent=True) as bar:
+                for returned, found in kb.runquery(equivalent):
+                    if found:
+                        retrieved.append(returned)
+                    bar.update(1)
+
+            score = apk(ground_truth.db[query], retrieved)
+            print(u"query {} returned {} images, ground-truth has {}. Score {:.4f}".format(query, len(retrieved), len(ground_truth.db[query]), score))
+            mean_average_precision.append(score)
+        
+
     return mean_average_precision
 
 
@@ -147,19 +167,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='IRRCC program')
     parser.add_argument('-d', '--dataset_path', action="store", default='data/segmentation/predicted_relation.csv')
     parser.add_argument('-q', '--queries_path', action="store", default='data/segmentation/query_equivalence.csv')
-    parser.add_argument('-t', '--test_anno', action="store", default='data/segmentation/test_anno')
+    parser.add_argument('-t', '--test_anno', action="store", default='data/segmentation/test_anno/')
     parser.add_argument('--ltb_runner', action="store", default='data/segmentation/ltb_runner')
     parser.add_argument('--eprover', action="store", default='data/segmentation/eprover')
-    parser.add_argument('--batch_config', action="store", default='data/segmentation/EBatchConfig.txt')
+    parser.add_argument('--batch_config', action="store", default='EBatchConfig.txt')
     params = parser.parse_args()
 
     df = pd.read_csv(params.dataset_path)
     kb = KnowledgeBase(df, ltb_runner=params.ltb_runner, eprover=params.eprover, batch_config=params.batch_config)
 
     queries = pd.read_csv(params.queries_path)
+    queries = dict(zip(queries['Original'], queries['Equivalent']))
 
     location = os.path.join(params.test_anno)
     qa = QueryAnnotation(location)
-
     mean_average_precision = evaluate(queries, qa, kb)
+    with open(os.path.join('data/segmentation/map_prover.json'), 'w') as fp:
+        json.dump(mean_average_precision, fp)
     print("mAP {:.4f}".format(np.mean(mean_average_precision)))

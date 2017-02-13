@@ -182,7 +182,7 @@ class Segmentation(Detection):
             contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             biggest = sorted([(len(cnt), nn) for nn, cnt in enumerate(contours)], key=lambda x: x[0], reverse=True)
             _, idx = biggest[0]
-            segmentation[k] = contours[idx]
+            segmentation[self.classes[k]] = contours[idx]
 
         return segmentation
 

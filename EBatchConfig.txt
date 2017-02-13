@@ -1,0 +1,14 @@
+% SZS start BatchConfiguration
+division.category LTB.SMO
+output.required Assurance
+output.desired Proof Answer
+limit.time.problem.wc 60
+% SZS end BatchConfiguration
+% SZS start BatchIncludes
+include('/Users/danilonunes/Documents/sigma/run/KBs/SUMO_UserAssertions.tptp').
+include('/Users/danilonunes/Documents/sigma/run/KBs/SUMO.tptp').
+include('/Users/danilonunes/workspace/IRRCC/IRRC.tptp').
+% SZS end BatchIncludes
+% SZS start BatchProblems
+/Users/danilonunes/workspace/IRRCC/Problems.p /Users/danilonunes/workspace/IRRCC/Answers.p
+% SZS end BatchProblems

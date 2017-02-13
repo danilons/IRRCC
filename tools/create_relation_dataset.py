@@ -17,19 +17,38 @@ from irrcc.query_annotation import QueryAnnotation
 def create_relation(handler, images, noun1, noun2, **kwargs):
     objects = handler.get_objects(images)
     objects = {handler.classes[k]: v for k, v in objects.items()}
-    cnt1 = objects.get(noun1)
-    cnt2 = objects.get(noun2)
-    
-    if cnt1 is None or cnt2 is None:
-        return ''
-    
-    x, y, w, h = cv2.boundingRect(cnt1)
-    x1, y1, x2, y2 = x, y, x + w, y + h
-    contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-    
-    x, y, w, h = cv2.boundingRect(cnt2)
-    x1, y1, x2, y2 = x, y, x + w, y + h
-    contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+    if kwargs.get('segmentation') == 'segmentation':
+        cnt1 = objects.get(noun1)
+        cnt2 = objects.get(noun2)
+        
+        if cnt1 is None or cnt2 is None:
+            return ''
+        
+        x, y, w, h = cv2.boundingRect(cnt1)
+        x1, y1, x2, y2 = x, y, x + w, y + h
+        contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+        
+        x, y, w, h = cv2.boundingRect(cnt2)
+        x1, y1, x2, y2 = x, y, x + w, y + h
+        contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+    else:
+        cnt1 = objects.get(noun1)
+        cnt2 = objects.get(noun2)
+        if cnt1 is None or cnt2 is None:
+            return ''
+
+        if cnt1.size <= 0 or cnt2.size <= 0:
+            return ''
+
+        cnt1 = cnt1.flatten()
+        cnt2 = cnt2.flatten()
+
+        x1, y1, x2, y2 = cnt1[:4].astype(np.int32)
+        contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+        x1, y1, x2, y2 = cnt2[:4].astype(np.int32)
+        contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
     
     return handler.detector.compute((384, 384), contour1, contour2).scope
 
@@ -42,6 +61,9 @@ if __name__ == "__main__":
     parser.set_defaults(feature=True)
     params = parser.parse_args()
 
+    segmentation = 'segmentation' if params.segmentation else 'detector'
+    print("Processing {}".format(segmentation))
+        
     for mode in ['train', 'test']:
         print("Processing file {}".format(mode))
         location = os.path.join(params.dataset_path, '{}_anno'.format(mode.lower()))
@@ -54,12 +76,10 @@ if __name__ == "__main__":
         
         handler = dset.segmentation if params.segmentation else dset.detector
 
-        df['rcc'] = df.apply(lambda x: create_relation(handler=handler, **x), axis=1)
-        df['predicted_noun1'] = df.apply(dset.images.get())
+        df['rcc'] = df.apply(lambda x: create_relation(handler=handler, segmentation=segmentation, **x), axis=1)
+        print("Processed records {}".format(df.shape))
 
-        segmentation = 'segmentation' if params.segmentation else 'detector'
-        fname = os.path.join(params.dataset_path, 'segmentation', mode + '_relation.csv')
+        fname = os.path.join(params.dataset_path, segmentation, mode + '_relation.csv')
         print("Saving file to: {}".format(fname))
 
-        print("Processed records {}".format(df.shape))
         df.to_csv(fname, index=None)

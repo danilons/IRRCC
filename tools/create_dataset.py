@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import json
 import click
 import argparse
 import scipy.io as sio
@@ -13,9 +14,11 @@ def save_image_list(dataset, image_path, output_path, mode):
         os.remove(basename)
 
     hdf5 = h5py.File(basename, 'w')
+    imagenames = []
     with click.progressbar(length=len(dataset), show_pos=True, show_percent=True) as bar:
         for row_number, annotation in enumerate(dataset['annotation']):
             filename = unicode(annotation['filename'])
+            imagenames.append(filename)
             try:
                 hdf5_group = hdf5.create_group(filename)
             except ValueError:
@@ -46,6 +49,9 @@ def save_image_list(dataset, image_path, output_path, mode):
 
 
             bar.update(1)
+    
+    with open(os.path.join(output_path, 'imagenames_{}.json'.format(mode)), 'w') as fp:
+        json.dump(imagenames, fp)
 
     hdf5.close()
 
