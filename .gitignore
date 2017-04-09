@@ -1,3 +1,9 @@
+Answers.p
+IRRC.tptp
+Problems.p
+execution.log
+notebooks/
+query_prover.sh
 .DS_Store
 .ipynb_checkpoints/
 *.ipynb

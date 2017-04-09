@@ -9,7 +9,7 @@ import pandas as pd
 import cytoolz
 import json
 import sys
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, roc_curve
 path = os.path.join(os.path.dirname(__file__), '..')
 sys.path.insert(0, path)
 from irrcc.dataset import Dataset
@@ -37,9 +37,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='IRRCC program')
     parser.add_argument('-d', '--dataset_path', action="store", default='data')
     parser.add_argument('-i', '--image_list', action="store", default='data/imagenames_test.json')
+    parser.add_argument('-q', '--queries_path', action="store", default='data/segmentation/query_equivalence.csv')
     parser.add_argument('-t', '--threshold', action="store", default=3.0, type=float)
     parser.add_argument('--segmentation', dest='segmentation', action="store_true", default=True)
     parser.add_argument('--no-segmentation', dest='segmentation', action='store_false')
+    parser.set_defaults(feature=True)
+    parser.add_argument('--equivalents', dest='equivalents', action="store_true", default=True)
+    parser.add_argument('--no-equivalents', dest='equivalents', action='store_false')
     parser.set_defaults(feature=True)
     params = parser.parse_args()
 
@@ -53,6 +57,9 @@ if __name__ == "__main__":
     qa = QueryAnnotation(location)
     df = pd.read_csv(os.path.join(params.dataset_path, segmentation, 'predicted_relation.csv'))
 
+    queries = pd.read_csv(params.queries_path)
+    queries = dict(zip(queries['Original'], queries['Equivalent']))
+
     print("Intersection size is {}".format(len(set(df.images) & set(qa.imgs))))
     print("QA imgs", len(set(qa.imgs)))
     print("DB imgs", len(set(df.images)))
@@ -64,8 +71,18 @@ if __name__ == "__main__":
     negative = len(imagenames)
     avg_precision = []
     mean_average_precision = []
+    
     with click.progressbar(length=len(qa.db), show_pos=True, show_percent=True) as bar:
-        for query in qa.db:
+        for nn, query in enumerate(qa.db):
+            if params.equivalents:
+                equivalent = queries.get(query)
+                try:
+                    if np.isnan(equivalent) or equivalent is None:
+                        print("Skipping {}".format(query))
+                        continue
+                except TypeError:
+                    pass
+
             noun1, preposition, noun2 = query.split('-')
             l1 = list(df[(df['noun1'] == noun1) & (df['rcc'].notnull())].images)
             l2 = list(df[(df['noun2'] == noun2) & (df['rcc'].notnull())].images)
