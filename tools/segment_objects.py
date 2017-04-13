@@ -19,12 +19,15 @@ def segment_objects(net, input_file, image_path, output_file):
                 bar.update(1)
                 continue
 
+            w, h, c = im.shape
+            net.blobs['data'].reshape(1, c, w, h)
+            
             transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
             transformer.set_transpose('data', (2, 0, 1))
             transformer.set_raw_scale('data', 255)
             transformer.set_channel_swap('data', (2, 1, 0))
 
-            net.blobs['data'].reshape(1, 3, 384, 384)
+            # net.blobs['data'].reshape(1, 3, 384, 384)
 
             transformed_image = transformer.preprocess('data', im)
 

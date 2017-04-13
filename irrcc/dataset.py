@@ -179,14 +179,14 @@ class Segmentation(Detection):
             img = np.zeros(objects.shape[:2], dtype=np.uint8)
             img[x, y] = 255.
             _, binary = cv2.threshold(img, 127,255,0)
-            contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            _, contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             biggest = sorted([(len(cnt), nn) for nn, cnt in enumerate(contours)], key=lambda x: x[0], reverse=True)
             _, idx = biggest[0]
             segmentation[self.classes[k]] = contours[idx]
 
         return segmentation
 
-    def topology_relation(self, shape,  image):
+    def topology_relation(self, shape, image):
         objects = self.get_objects(image)
         if len(objects) == 0:
             return []
@@ -195,23 +195,41 @@ class Segmentation(Detection):
         if len(objects) == 1:
             return [(contours, contours, 'EQ')]
 
+
+        def draw(shape, countour):
+            img = np.zeros(shape, dtype=np.uint8)
+            cv2.drawContours(img, [contour], 1, -1)
+            return img
+
         relations = []
-        nn1 = 0
-        for obj1, c1 in contours:
-            nn1 += 1
-            x, y, w, h = cv2.boundingRect(c1)
-            x1, y1, x2, y2 = x, y, x + w, y + h
-            contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+        images = {}
+        keys = set()
+        for ((obj1, c1), (obj2, c2)) in itertools.combinations(contours, 2):
+            key = '{}:{}'.format(obj1, obj2)
+            if key in keys:
+                continue 
 
-            for obj2, c2 in contours[nn1:]:
-                x, y, w, h = cv2.boundingRect(c2)
-                x1, y1, x2, y2 = x, y, x + w, y + h
-                contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+            x1, y1, w1, h1 = cv2.boundingRect(c1)
+            x11, y11, x12, y12 = x1, y1, x1 + w1, y1 + h1
+            x11, x12 = sorted([x11, x12])
+            y11, y12 = sorted([y11, y12])
+            contour1 = np.array([[x11, y11], [x11, y12], [x12, y12], [x12, y11]])
 
-                relation = self.detector.compute(shape, contour1, contour2)
-                relations.append({'objects': (self.classes[obj1], self.classes[obj2]), 
-                                  'contours': (contour1, contour2), 
-                                  'relation': relation.scope})
+            imx = images.get(obj1, draw(shape, contour1))
+           
+            x2, y2, w2, h2 = cv2.boundingRect(c2)
+            x21, y21, x22, y22 = x2, y2, x2 + w2, y2 + h2
+            x21, x22 = sorted([x21, x22])
+            y21, y22 = sorted([y21, y22])
+            contour2 = np.array([[x21, y21], [x21, y22], [x22, y22], [x22, y21]])
+
+            imy = images.get(obj2, draw(shape, contour2))
+
+            relation = self.detector.detect(imx, imy + 1)
+            relations.append({'objects': (obj1, obj2), 
+                              'contours': (contour1, contour2), 
+                              'relation': relation.scope})
+            keys.insert(key)
 
         return relations
 

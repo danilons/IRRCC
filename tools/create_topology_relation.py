@@ -20,12 +20,16 @@ def store_topology(dset, output_file):
     hdf5 = h5py.File(filename, 'w')
     with click.progressbar(length=len(dset.images), show_pos=True, show_percent=True) as bar:
         for image in dset.images:
+            if image in hdf5:
+                continue
+                
             try: 
                 relations = dset.segmentation.topology_relation((384, 384), image)
-            except KeyError:
+            except KeyError as ex:
+                print ex
                 bar.update(1)
                 continue
-           
+            
             hdf5_group = hdf5.create_group(image)
             for topology in relations:
                 objects = '-'.join(topology['objects']).strip()
@@ -52,16 +56,15 @@ if __name__ == "__main__":
 
     files = glob.glob(os.path.join(params.dataset_path, 'dataset_*.hdf5'))
     for fname in files:
-        if 'train' in fname:
-            print("Start processing file: {}".format(fname))
-            
-            basename = os.path.basename(fname)
-            filename, _ = os.path.splitext(basename)
-            mode = filename.replace('dataset_', '')
-            print("Processing mode: {}".format(mode))
+        print("Start processing file: {}".format(fname))
+        
+        basename = os.path.basename(fname)
+        filename, _ = os.path.splitext(basename)
+        mode = filename.replace('dataset_', '')
+        print("Processing mode: {}".format(mode))
 
-            dset = Dataset(params.dataset_path, mode, params.image_path)
-            output_file = fname.replace('dataset_', 'topology_#_')
-            store_topology(dset, output_file)
+        dset = Dataset(params.dataset_path, mode, params.image_path)
+        output_file = fname.replace('dataset_', 'topology_#_')
+        store_topology(dset, output_file)
 
     print("Done.")
