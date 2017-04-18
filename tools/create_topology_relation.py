@@ -11,6 +11,7 @@ path = os.path.join(os.path.dirname(__file__), '..')
 sys.path.insert(0, path)
 from irrcc.dataset import Dataset
 
+
 def store_topology(dset, output_file):
     filename = output_file.replace('#', 'segment')
     if os.path.exists(filename):
@@ -25,11 +26,10 @@ def store_topology(dset, output_file):
                 
             try: 
                 relations = dset.segmentation.topology_relation((384, 384), image)
-            except KeyError as ex:
-                print ex
+            except KeyError, ValueError:
                 bar.update(1)
                 continue
-            
+
             hdf5_group = hdf5.create_group(image)
             for topology in relations:
                 objects = '-'.join(topology['objects']).strip()

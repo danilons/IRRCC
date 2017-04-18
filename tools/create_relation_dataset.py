@@ -7,32 +7,35 @@ import argparse
 import pandas as pd
 import numpy as np
 import cv2
-import caffe
-from skimage import img_as_ubyte
-from skimage.transform import resize
 from irrcc.dataset import Dataset
 from irrcc.query_annotation import QueryAnnotation
 
 
 def create_relation(handler, images, noun1, noun2, **kwargs):
     objects = handler.get_objects(images)
-    objects = {handler.classes[k]: v for k, v in objects.items()}
+
     if kwargs.get('segmentation') == 'segmentation':
+        objects = {handler._classname[k]: v for k, v in objects.items()}
         cnt1 = objects.get(noun1)
         cnt2 = objects.get(noun2)
-        
+
         if cnt1 is None or cnt2 is None:
             return ''
-        
-        x, y, w, h = cv2.boundingRect(cnt1)
-        x1, y1, x2, y2 = x, y, x + w, y + h
-        contour1 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-        
-        x, y, w, h = cv2.boundingRect(cnt2)
-        x1, y1, x2, y2 = x, y, x + w, y + h
-        contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
+
+        x1, y1, w1, h1 = cv2.boundingRect(cnt1)
+        x11, y11, x12, y12 = x1, y1, x1 + w1, y1 + h1
+        x11, x12 = sorted([x11, x12])
+        y11, y12 = sorted([y11, y12])
+        contour1 = np.array([[x11, y11], [x11, y12], [x12, y12], [x12, y11]])
+
+        x2, y2, w2, h2 = cv2.boundingRect(cnt2)
+        x21, y21, x22, y22 = x2, y2, x2 + w2, y2 + h2
+        x21, x22 = sorted([x21, x22])
+        y21, y22 = sorted([y21, y22])
+        contour2 = np.array([[x21, y21], [x21, y22], [x22, y22], [x22, y21]])
 
     else:
+        objects = {handler.classes[k]: v for k, v in objects.items()}
         cnt1 = objects.get(noun1)
         cnt2 = objects.get(noun2)
         if cnt1 is None or cnt2 is None:
@@ -49,7 +52,7 @@ def create_relation(handler, images, noun1, noun2, **kwargs):
 
         x1, y1, x2, y2 = cnt2[:4].astype(np.int32)
         contour2 = np.array([[x1, y1], [x1, y2], [x2, y1], [x2, y2]])
-    
+
     return handler.detector.compute((384, 384), contour1, contour2).scope
 
 if __name__ == "__main__":
@@ -78,7 +81,7 @@ if __name__ == "__main__":
 
         df['rcc'] = df.apply(lambda x: create_relation(handler=handler, segmentation=segmentation, **x), axis=1)
         print("Processed records {}".format(df.shape))
-
+        
         fname = os.path.join(params.dataset_path, segmentation, mode + '_relation.csv')
         print("Saving file to: {}".format(fname))
 
