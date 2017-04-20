@@ -5,7 +5,7 @@ import h5py
 import cv2
 import numpy as np
 import collections
-from scipy.io import loadmat
+import pandas as pd
 from utils import nms
 from relation import RCC
 
@@ -154,23 +154,29 @@ class Detection(object):
 
         return relations
 
-class Segmentation(Detection):
-    def __init__(self, path, suffix='train'):
-        fname = os.path.join(path, 'segmentation_{}.hdf5'.format(suffix))
-        print("Reading segmentation from {}".format(fname))
-        self.objects = h5py.File(fname)
-        self._classes = collections.OrderedDict()
-        with open(os.path.join(path, 'sceneparsing' , 'names.txt'), 'r') as fp:
-            for line in fp.readlines()[1:]:
-                index, _, _, _, name = line.strip().split('\t')
-                self._classes[np.int32(index)] = name
 
+class Segmentation(Detection):
+
+    def __init__(self, path, suffix='train'):
+        self.path = os.path.join(path, '..', 'segmentation')
+        self._classes = collections.OrderedDict()
+        fname = os.path.join(path, 'sceneparsing' , 'objectInfo150.txt')
+        print("Reading segmentation from {}".format(fname))
+        df = pd.read_csv(fname, sep='\t')
+        df['Name'] = df['Name'].apply(lambda x: x.split(', ')[0])
+        self._classes = df[['Idx', 'Name']].set_index('Idx')['Name'].to_dict()
         self._classname = {v: k for k, v in self._classes.iteritems()}
+
         # topological stuff
         self.detector = RCC()
 
     def get_objects(self, image, **kwargs):
-        objects = np.array(self.objects[image])
+        imname = image.replace('.jpg', '.png')
+        # objects = np.array(self.objects[image])
+        objects = cv2.imread(os.path.join(self.path, imname), 0)
+        if objects is None:
+            return {}
+
         classes = np.unique(objects)
         segmentation = {}
 
@@ -196,9 +202,9 @@ class Segmentation(Detection):
             return [(contours, contours, 'EQ')]
 
 
-        def draw(shape, countour):
+        def draw(shape, contour):
             img = np.zeros(shape, dtype=np.uint8)
-            cv2.drawContours(img, [contour], 1, -1)
+            cv2.drawContours(img, [contour], -1, 1, -1)
             return img
 
         relations = []
@@ -229,7 +235,7 @@ class Segmentation(Detection):
             relations.append({'objects': (obj1, obj2), 
                               'contours': (contour1, contour2), 
                               'relation': relation.scope})
-            keys.insert(key)
+            keys.add(key)
 
         return relations
 
