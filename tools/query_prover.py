@@ -117,7 +117,6 @@ class KnowledgeBase:
         return image, None, response
 
     def runquery(self, query):
-        responses = {}
         for image in self.images:
             image, imname, _ = self.prover(image=image, query=query)
             yield image, imname

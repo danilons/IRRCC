@@ -40,13 +40,14 @@ class Dataset(object):
 
     def get_im_array(self, image, rgb=False):
         if rgb:
-            cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
+            return cv2.imread(os.path.join(self.image_path, image))[:, :, (2, 1, 0)]
         return cv2.imread(os.path.join(self.image_path, image))     
         
     def get_image_with_objects(self, image, obj_id=None, **kwargs):
         img = self.get_im_array(image, **kwargs)
         self.detector.get_image_with_objects(img, image, obj_id, **kwargs)
         return img
+
 
 class Detection(object):
 
@@ -172,7 +173,6 @@ class Segmentation(Detection):
 
     def get_objects(self, image, **kwargs):
         imname = image.replace('.jpg', '.png')
-        # objects = np.array(self.objects[image])
         objects = cv2.imread(os.path.join(self.path, imname), 0)
         if objects is None:
             return {}
@@ -200,7 +200,6 @@ class Segmentation(Detection):
         contours = objects.items()
         if len(objects) == 1:
             return [(contours, contours, 'EQ')]
-
 
         def draw(shape, contour):
             img = np.zeros(shape, dtype=np.uint8)
