@@ -55,22 +55,35 @@ def store_topology(dset, output_file):
 
     print("Saving")
     hdf5 = h5py.File(fname, 'w')
-    for (image, relations) in content.iteritems():
-        hdf5_group = hdf5.create_group(image)
-        for topology in relations:
-            objects = '-'.join(topology['objects']).strip()
-            try:
-                hdf5_group.create_group(objects)
-                hdf5_group[objects].create_dataset('contours1', data=topology['contours'][0], compression="gzip")
-                hdf5_group[objects].create_dataset('contours2', data=topology['contours'][1], compression="gzip")
-                hdf5_group[objects]['relation'] = numpy.string_(topology['relation'])
-            except ValueError:
-                print("Error when processing image {} and {}".format(image, objects))
-            except RuntimeError:
-                print("Runtime error when processing image {} and {}".format(image, objects))
+    with click.progressbar(length=len(content), show_pos=True, show_percent=True) as bar:
+        for (image, relations) in content.iteritems():
+            if image in hdf5:
                 continue
-            except IOError:
-                print("IOError error when processing image {} and {}".format(image, objects))
+
+            try:
+                hdf5_group = hdf5.create_group(image)
+            except RuntimeError:
+                continue
+
+            for topology in relations:
+                try:
+                    objects = '-'.join(topology['objects']).strip()
+                    if objects in hdf5_group:
+                        continue
+                    hdf5_group.create_group(objects)
+                    hdf5_group[objects].create_dataset('contours1', data=topology['contours'][0], compression="gzip")
+                    hdf5_group[objects].create_dataset('contours2', data=topology['contours'][1], compression="gzip")
+                    hdf5_group[objects]['relation'] = numpy.string_(topology['relation'])
+                except ValueError:
+                    print("Error when processing image {} and {}".format(image, objects))
+                except RuntimeError:
+                    print("Runtime error when processing image {} and {}".format(image, objects))
+                    continue
+                except IOError:
+                    print("IOError error when processing image {} and {}".format(image, objects))
+                except TypeError:
+                    print("Fucking error I have no idea. image {} and {}".format(image, objects))
+            bar.update(1)
 
 
 if __name__ == "__main__":
@@ -81,15 +94,16 @@ if __name__ == "__main__":
 
     files = glob.glob(os.path.join(params.dataset_path, 'dataset_*.hdf5'))
     for fname in files:
-        print("Start processing file: {}".format(fname))
-        
-        basename = os.path.basename(fname)
-        filename, _ = os.path.splitext(basename)
-        mode = filename.replace('dataset_', '')
-        print("Processing mode: {}".format(mode))
+        if 'train' in fname:
+            print("Start processing file: {}".format(fname))
 
-        dset = Dataset(params.dataset_path, mode, params.image_path)
-        output_file = fname.replace('dataset_', 'topology_#_')
-        store_topology(dset, output_file)
+            basename = os.path.basename(fname)
+            filename, _ = os.path.splitext(basename)
+            mode = filename.replace('dataset_', '')
+            print("Processing mode: {}".format(mode))
+
+            dset = Dataset(params.dataset_path, mode, params.image_path)
+            output_file = fname.replace('dataset_', 'topology_#_')
+            store_topology(dset, output_file)
 
     print("Done.")
